@@ -14,6 +14,7 @@ interface Product {
   stock: number;
   image_url?: string;
   category?: string;
+  related_products?: string[];
 }
 
 const AdminPage = () => {
@@ -21,12 +22,14 @@ const AdminPage = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // form
   const [name, setName] = useState("");
   const [desc, setDesc] = useState("");
   const [price, setPrice] = useState("");
   const [stock, setStock] = useState("");
   const [image, setImage] = useState("");
   const [category, setCategory] = useState("");
+  const [relatedProducts, setRelatedProducts] = useState<string[]>([]);
 
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -39,14 +42,13 @@ const AdminPage = () => {
     { id: "saddle", label: "Saddle" },
   ];
 
-  // Fetch produk
+  // ambil produk
   const fetchProducts = async () => {
     setLoading(true);
     const { data, error } = await supabase
       .from("products")
       .select("*")
       .order("created_at", { ascending: false });
-
     if (error) {
       toast({
         title: "Error",
@@ -63,61 +65,49 @@ const AdminPage = () => {
     fetchProducts();
   }, []);
 
-  // Tambah / Update produk
+  // tambah / update
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    const dataProduct = {
+      name,
+      description: desc,
+      price: parseFloat(price),
+      stock: parseInt(stock),
+      image_url: image,
+      category,
+      related_products: relatedProducts, // ✅ simpan produk terkait
+    };
+
+    let error;
     if (editingId) {
-      const { error } = await supabase
+      ({ error } = await supabase
         .from("products")
-        .update({
-          name,
-          description: desc,
-          price: parseFloat(price),
-          stock: parseInt(stock),
-          image_url: image,
-          category, // ✅ kategori disimpan
-        })
-        .eq("id", editingId);
-
-      if (error) {
-        toast({
-          title: "Error",
-          description: error.message,
-          variant: "destructive",
-        });
-      } else {
-        toast({ title: "Sukses", description: "Produk diperbarui" });
-        resetForm();
-        fetchProducts();
-      }
+        .update(dataProduct)
+        .eq("id", editingId));
     } else {
-      const { error } = await supabase.from("products").insert([
-        {
-          name,
-          description: desc,
-          price: parseFloat(price),
-          stock: parseInt(stock),
-          image_url: image,
-          category, // ✅ simpan kategori baru
-        },
-      ]);
+      ({ error } = await supabase.from("products").insert([dataProduct]));
+    }
 
-      if (error) {
-        toast({
-          title: "Error",
-          description: error.message,
-          variant: "destructive",
-        });
-      } else {
-        toast({ title: "Sukses", description: "Produk ditambahkan" });
-        resetForm();
-        fetchProducts();
-      }
+    if (error) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "Sukses",
+        description: editingId
+          ? "Produk diperbarui"
+          : "Produk berhasil ditambahkan",
+      });
+      resetForm();
+      fetchProducts();
     }
   };
 
-  // Hapus produk
+  // hapus produk
   const handleDeleteProduct = async (id: string) => {
     const { error } = await supabase.from("products").delete().eq("id", id);
     if (error) {
@@ -132,14 +122,16 @@ const AdminPage = () => {
     }
   };
 
-  const handleEditProduct = (product: Product) => {
-    setEditingId(product.id);
-    setName(product.name);
-    setDesc(product.description || "");
-    setPrice(product.price.toString());
-    setStock(product.stock.toString());
-    setImage(product.image_url || "");
-    setCategory(product.category || "");
+  // edit
+  const handleEditProduct = (p: Product) => {
+    setEditingId(p.id);
+    setName(p.name);
+    setDesc(p.description || "");
+    setPrice(p.price.toString());
+    setStock(p.stock.toString());
+    setImage(p.image_url || "");
+    setCategory(p.category || "");
+    setRelatedProducts(p.related_products || []); // ✅ isi ulang produk terkait
   };
 
   const resetForm = () => {
@@ -150,6 +142,7 @@ const AdminPage = () => {
     setStock("");
     setImage("");
     setCategory("");
+    setRelatedProducts([]);
   };
 
   return (
@@ -163,7 +156,7 @@ const AdminPage = () => {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Dropdown kategori */}
+            {/* Kategori */}
             <div>
               <Label>Kategori</Label>
               <select
@@ -179,6 +172,33 @@ const AdminPage = () => {
                   </option>
                 ))}
               </select>
+            </div>
+
+            {/* Produk terkait */}
+            <div>
+              <Label>Produk Terkait</Label>
+              <select
+                multiple
+                value={relatedProducts}
+                onChange={(e) =>
+                  setRelatedProducts(
+                    Array.from(
+                      e.target.selectedOptions,
+                      (option) => option.value
+                    )
+                  )
+                }
+                className="border rounded-md px-2 py-2 w-full bg-background text-foreground h-32"
+              >
+                {products.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-muted-foreground mt-1">
+                Tekan Ctrl (atau Cmd di Mac) untuk memilih lebih dari satu produk.
+              </p>
             </div>
 
             <div>
@@ -229,11 +249,7 @@ const AdminPage = () => {
                 {editingId ? "Update Produk" : "Tambah Produk"}
               </Button>
               {editingId && (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={resetForm}
-                >
+                <Button type="button" variant="secondary" onClick={resetForm}>
                   Batal
                 </Button>
               )}
@@ -254,30 +270,35 @@ const AdminPage = () => {
             <p>Tidak ada produk.</p>
           ) : (
             <div className="space-y-4">
-              {products.map((product) => (
+              {products.map((p) => (
                 <div
-                  key={product.id}
+                  key={p.id}
                   className="flex items-center justify-between border-b pb-2"
                 >
                   <div>
-                    <p className="font-semibold">{product.name}</p>
+                    <p className="font-semibold">{p.name}</p>
                     <p className="text-sm text-muted-foreground">
-                      Kategori: {product.category || "—"} | Rp {product.price} | Stok:{" "}
-                      {product.stock}
+                      Kategori: {p.category || "—"} | Rp {p.price} | Stok:{" "}
+                      {p.stock}
                     </p>
+                    {p.related_products && p.related_products.length > 0 && (
+                      <p className="text-xs text-muted-foreground">
+                        Terkait: {p.related_products.length} produk
+                      </p>
+                    )}
                   </div>
                   <div className="flex gap-2">
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => handleEditProduct(product)}
+                      onClick={() => handleEditProduct(p)}
                     >
                       Edit
                     </Button>
                     <Button
                       variant="destructive"
                       size="sm"
-                      onClick={() => handleDeleteProduct(product.id)}
+                      onClick={() => handleDeleteProduct(p.id)}
                     >
                       Hapus
                     </Button>
