@@ -8,6 +8,7 @@ import { useCart } from "@/hooks/useCart";
 import { supabase } from "@/lib/supabaseClient";
 import { Product } from "@/types/product";
 
+
 const Index = () => {
   const [activeCategory, setActiveCategory] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");

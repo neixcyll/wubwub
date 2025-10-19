@@ -5,15 +5,21 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
+import { Textarea } from "@/components/ui/textarea";
 
 interface Product {
   id: string;
   name: string;
   description?: string;
+  long_description?: string;
   price: number;
   stock: number;
   image_url?: string;
   category?: string;
+  brand?: string;
+  images?: string[];
+  specifications?: Record<string, string>;
+  variants?: Record<string, string[]>;
   related_products?: string[];
 }
 
@@ -22,15 +28,19 @@ const AdminPage = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // form
+  // form states
   const [name, setName] = useState("");
   const [desc, setDesc] = useState("");
+  const [longDesc, setLongDesc] = useState("");
   const [price, setPrice] = useState("");
   const [stock, setStock] = useState("");
   const [image, setImage] = useState("");
+  const [gallery, setGallery] = useState("");
+  const [specs, setSpecs] = useState("");
+  const [variants, setVariants] = useState("");
   const [category, setCategory] = useState("");
+  const [brand, setBrand] = useState("");
   const [relatedProducts, setRelatedProducts] = useState<string[]>([]);
-
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const categories = [
@@ -42,13 +52,14 @@ const AdminPage = () => {
     { id: "saddle", label: "Saddle" },
   ];
 
-  // ambil produk
+  // Fetch produk dari Supabase
   const fetchProducts = async () => {
     setLoading(true);
     const { data, error } = await supabase
       .from("products")
       .select("*")
       .order("created_at", { ascending: false });
+
     if (error) {
       toast({
         title: "Error",
@@ -65,49 +76,58 @@ const AdminPage = () => {
     fetchProducts();
   }, []);
 
-  // tambah / update
+  // Tambah / Update produk
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const dataProduct = {
-      name,
-      description: desc,
-      price: parseFloat(price),
-      stock: parseInt(stock),
-      image_url: image,
-      category,
-      related_products: relatedProducts, // ✅ simpan produk terkait
-    };
+    try {
+      const dataProduct = {
+        name,
+        description: desc,
+        long_description: longDesc || null,
+        specifications: specs ? JSON.parse(specs) : null,
+        variants: variants ? JSON.parse(variants) : null,
+        images: gallery ? gallery.split(",").map((url) => url.trim()) : [],
+        price: parseFloat(price),
+        stock: parseInt(stock),
+        image_url: image,
+        category,
+        brand,
+        related_products: relatedProducts,
+      };
 
-    let error;
-    if (editingId) {
-      ({ error } = await supabase
-        .from("products")
-        .update(dataProduct)
-        .eq("id", editingId));
-    } else {
-      ({ error } = await supabase.from("products").insert([dataProduct]));
-    }
+      let error;
+      if (editingId) {
+        ({ error } = await supabase
+          .from("products")
+          .update(dataProduct)
+          .eq("id", editingId));
+      } else {
+        ({ error } = await supabase.from("products").insert([dataProduct]));
+      }
 
-    if (error) {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
-    } else {
+      if (error) {
+        throw new Error(error.message);
+      }
+
       toast({
         title: "Sukses",
         description: editingId
-          ? "Produk diperbarui"
+          ? "Produk berhasil diperbarui"
           : "Produk berhasil ditambahkan",
       });
       resetForm();
       fetchProducts();
+    } catch (err: any) {
+      toast({
+        title: "Error",
+        description: err.message || "Gagal menyimpan produk.",
+        variant: "destructive",
+      });
     }
   };
 
-  // hapus produk
+  // Hapus produk
   const handleDeleteProduct = async (id: string) => {
     const { error } = await supabase.from("products").delete().eq("id", id);
     if (error) {
@@ -122,37 +142,45 @@ const AdminPage = () => {
     }
   };
 
-  // edit
+  // Edit produk
   const handleEditProduct = (p: Product) => {
     setEditingId(p.id);
     setName(p.name);
     setDesc(p.description || "");
+    setLongDesc(p.long_description || "");
     setPrice(p.price.toString());
     setStock(p.stock.toString());
     setImage(p.image_url || "");
     setCategory(p.category || "");
-    setRelatedProducts(p.related_products || []); // ✅ isi ulang produk terkait
+    setBrand(p.brand || "");
+    setGallery(p.images?.join(", ") || "");
+    setSpecs(p.specifications ? JSON.stringify(p.specifications) : "");
+    setVariants(p.variants ? JSON.stringify(p.variants) : "");
+    setRelatedProducts(p.related_products || []);
   };
 
   const resetForm = () => {
     setEditingId(null);
     setName("");
     setDesc("");
+    setLongDesc("");
     setPrice("");
     setStock("");
     setImage("");
+    setGallery("");
+    setSpecs("");
+    setVariants("");
     setCategory("");
+    setBrand("");
     setRelatedProducts([]);
   };
 
   return (
     <div className="p-8 space-y-8">
       {/* Form tambah/update produk */}
-      <Card className="max-w-lg mx-auto">
+      <Card className="max-w-2xl mx-auto">
         <CardHeader>
-          <CardTitle>
-            {editingId ? "Update Produk" : "Tambah Produk"}
-          </CardTitle>
+          <CardTitle>{editingId ? "Edit Produk" : "Tambah Produk"}</CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -201,6 +229,7 @@ const AdminPage = () => {
               </p>
             </div>
 
+            {/* Nama & brand */}
             <div>
               <Label>Nama Produk</Label>
               <Input
@@ -211,10 +240,53 @@ const AdminPage = () => {
             </div>
 
             <div>
-              <Label>Deskripsi</Label>
-              <Input value={desc} onChange={(e) => setDesc(e.target.value)} />
+              <Label>Brand</Label>
+              <Input
+                value={brand}
+                onChange={(e) => setBrand(e.target.value)}
+                placeholder="contoh: Shimano, FixGear Co"
+              />
             </div>
 
+            {/* Deskripsi */}
+            <div>
+              <Label>Deskripsi Singkat</Label>
+              <Input
+                value={desc}
+                onChange={(e) => setDesc(e.target.value)}
+                placeholder="Deskripsi pendek untuk tampilan grid"
+              />
+            </div>
+
+            <div>
+              <Label>Deskripsi Lengkap</Label>
+              <Textarea
+                value={longDesc}
+                onChange={(e) => setLongDesc(e.target.value)}
+                placeholder="Tuliskan deskripsi lengkap produk..."
+              />
+            </div>
+
+            {/* Gambar utama dan galeri */}
+            <div>
+              <Label>URL Gambar Utama</Label>
+              <Input
+                value={image}
+                onChange={(e) => setImage(e.target.value)}
+                placeholder="https://example.com/gambar.jpg"
+              />
+            </div>
+
+            <div>
+              <Label>Galeri Gambar (pisahkan koma)</Label>
+              <Input
+                value={gallery}
+                onChange={(e) => setGallery(e.target.value)}
+                placeholder="https://img1.jpg, https://img2.jpg"
+              />
+            </div>
+            
+            {/* Harga & Stok */}
             <div>
               <Label>Harga</Label>
               <Input
@@ -235,15 +307,6 @@ const AdminPage = () => {
               />
             </div>
 
-            <div>
-              <Label>URL Gambar</Label>
-              <Input
-                value={image}
-                onChange={(e) => setImage(e.target.value)}
-                placeholder="https://example.com/gambar.jpg"
-              />
-            </div>
-
             <div className="flex gap-2">
               <Button type="submit" className="flex-1">
                 {editingId ? "Update Produk" : "Tambah Produk"}
@@ -258,7 +321,7 @@ const AdminPage = () => {
         </CardContent>
       </Card>
 
-      {/* List produk */}
+      {/* Daftar produk */}
       <Card>
         <CardHeader>
           <CardTitle>Daftar Produk</CardTitle>

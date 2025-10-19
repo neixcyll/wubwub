@@ -19,6 +19,7 @@ interface CartItem {
     image_url?: string;
     brand?: string;
     stock: number;
+    motif?: string; // ✅ tambahkan motif di tipe produk
   };
 }
 
@@ -55,9 +56,22 @@ const Cart = () => {
       if (!userId) return;
       setLoading(true);
 
+      // ✅ ambil kolom motif secara eksplisit dari tabel products
       const { data, error } = await supabase
         .from("cart_items")
-        .select("id, quantity, products(*)")
+        .select(`
+          id,
+          quantity,
+          products (
+            id,
+            name,
+            price,
+            image_url,
+            brand,
+            stock,
+            motif
+          )
+        `)
         .eq("user_id", userId);
 
       if (error) {
@@ -185,6 +199,11 @@ const Cart = () => {
                     <h3 className="font-semibold mb-1">
                       {item.products.name}
                     </h3>
+                    {item.products.motif && (
+                      <p className="text-xs text-muted-foreground mb-1">
+                        Motif: {item.products.motif}
+                      </p>
+                    )}
                     <p className="text-sm text-muted-foreground mb-2">
                       {item.products.brand}
                     </p>
